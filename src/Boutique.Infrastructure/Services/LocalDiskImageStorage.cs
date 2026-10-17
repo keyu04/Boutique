@@ -30,4 +30,5 @@ public class LocalDiskImageStorage : IImageStorage
         if (File.Exists(path)) File.Delete(path);
         return Task.CompletedTask;
     }
+    public string GetUrl(string storageKey) => $"{_baseUrl}/{storageKey}";
 }

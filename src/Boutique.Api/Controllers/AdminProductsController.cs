@@ -271,7 +271,7 @@ public class AdminProductsController : ControllerBase
             }
 
             await _db.SaveChangesAsync(ct);
-            return Ok(created.Select(i => new ProductImageDto(i.Id, i.Url, i.AltText, i.SortOrder, i.IsPrimary)).ToList());
+            return Ok(created.Select(ToImageDto).ToList());
         }
         catch
         {
@@ -288,5 +288,63 @@ public class AdminProductsController : ControllerBase
         if (len >= 12 && h[0] == 'R' && h[1] == 'I' && h[2] == 'F' && h[3] == 'F'
                       && h[8] == 'W' && h[9] == 'E' && h[10] == 'B' && h[11] == 'P') return ".webp";
         return null;
+    }
+    private ProductImageDto ToImageDto(ProductImage i) =>
+    new(i.Id, i.StorageKey != null ? _storage.GetUrl(i.StorageKey) : i.Url,
+        i.AltText, i.SortOrder, i.IsPrimary);
+
+    [HttpPut("{id:int}/images/order")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<ProductImageDto>>> ReorderImages(
+        int id, ReorderImagesRequest req, CancellationToken ct)
+    {
+        var images = await _db.ProductImages.Where(i => i.ProductId == id).ToListAsync(ct);
+        if (images.Count == 0) return NotFound();
+
+        var ids = req.ImageIds ?? new List<int>();
+        if (ids.Count != images.Count
+            || ids.Distinct().Count() != ids.Count
+            || !ids.All(x => images.Any(i => i.Id == x)))
+            return BadRequest("imageIds must list every image of this product exactly once.");
+
+        for (var pos = 0; pos < ids.Count; pos++)
+            images.First(i => i.Id == ids[pos]).SortOrder = pos;
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(images.OrderBy(i => i.SortOrder).Select(ToImageDto).ToList());
+    }
+
+    [HttpPatch("{id:int}/images/{imageId:int}/primary")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SetPrimaryImage(int id, int imageId, CancellationToken ct)
+    {
+        var images = await _db.ProductImages.Where(i => i.ProductId == id).ToListAsync(ct);
+        if (!images.Any(i => i.Id == imageId)) return NotFound();
+
+        foreach (var i in images) i.IsPrimary = i.Id == imageId;   // exactly one primary
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}/images/{imageId:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteImage(int id, int imageId, CancellationToken ct)
+    {
+        var images = await _db.ProductImages
+            .Where(i => i.ProductId == id).OrderBy(i => i.SortOrder).ToListAsync(ct);
+        var image = images.FirstOrDefault(i => i.Id == imageId);
+        if (image is null) return NotFound();
+
+        _db.ProductImages.Remove(image);
+        if (image.IsPrimary)
+        {
+            var next = images.FirstOrDefault(i => i.Id != imageId);   // promote the next image
+            if (next != null) next.IsPrimary = true;
+        }
+
+        await _db.SaveChangesAsync(ct);                     // DB first...
+        if (image.StorageKey != null)
+            await _storage.DeleteAsync(image.StorageKey, ct); // ...then the file
+        return NoContent();
     }
 }

@@ -35,3 +35,4 @@ public record AdminProductDetailDto(
     decimal WeightKg, string? Tag, bool IsActive,
     List<AdminVariantDto> Variants, List<AdminImageDto> Images);
 public record ProductImageDto(int Id, string Url, string? AltText, int SortOrder, bool IsPrimary);
+public record ReorderImagesRequest(List<int> ImageIds);

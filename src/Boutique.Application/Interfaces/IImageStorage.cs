@@ -6,4 +6,5 @@ public interface IImageStorage
 {
     Task<StoredImage> SaveAsync(Stream content, string extension, CancellationToken ct);
     Task DeleteAsync(string storageKey, CancellationToken ct);
+    string GetUrl(string storageKey);
 }
