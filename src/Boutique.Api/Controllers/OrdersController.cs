@@ -28,6 +28,11 @@ public class OrdersController : ControllerBase
         // 1. Basic validation
         if (req.Items is null || req.Items.Count == 0)
             return BadRequest(new { error = "Your bag is empty." });
+        var qtyError = CheckoutRules.ValidateQuantities(req.Items.Select(i => i.Quantity).ToList());
+        if (qtyError != null) return BadRequest(new { error = qtyError });
+
+        if (!CheckoutRules.TryParsePaymentMethod(req.PaymentMethod, out var paymentMethod))
+            return BadRequest(new { error = "PaymentMethod must be 'Prepaid' or 'Cod'." });
         if (string.IsNullOrWhiteSpace(req.CustomerName))
             return BadRequest(new { error = "Name is required." });
         if (!System.Text.RegularExpressions.Regex.IsMatch(req.Phone ?? "", @"^\d{10}$"))
@@ -36,8 +41,6 @@ public class OrdersController : ControllerBase
             return BadRequest(new { error = "Enter a valid 6-digit pincode." });
         if (string.IsNullOrWhiteSpace(req.AddressLine) || string.IsNullOrWhiteSpace(req.City) || string.IsNullOrWhiteSpace(req.State))
             return BadRequest(new { error = "Full address, city and state are required." });
-        if (!Enum.TryParse<PaymentMethod>(req.PaymentMethod, true, out var paymentMethod))
-            return BadRequest(new { error = "Invalid payment method." });
 
         // merge duplicate variant lines
         var mergedItems = req.Items

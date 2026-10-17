@@ -28,6 +28,12 @@ public class ShippingController : ControllerBase
         if (req.Items is null || req.Items.Count == 0)
             return BadRequest(new { error = "No items to estimate." });
 
+        var qtyError = CheckoutRules.ValidateQuantities(req.Items.Select(i => i.Quantity).ToList());
+        if (qtyError != null) return BadRequest(new { error = qtyError });
+
+        if (!CheckoutRules.TryParsePaymentMethod(req.PaymentMethod, out var paymentMethod))
+            return BadRequest(new { error = "PaymentMethod must be 'Prepaid' or 'Cod'." });
+
         var variantIds = req.Items.Select(i => i.VariantId).ToList();
         var variants = await _db.ProductVariants
             .Include(v => v.Product)
