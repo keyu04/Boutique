@@ -101,9 +101,7 @@ public static class DbSeeder
         db.Products.AddRange(products);
         await db.SaveChangesAsync();
     }
-    public static async Task SeedIdentityAsync(
-    RoleManager<IdentityRole<int>> roleManager,
-    UserManager<AdminUser> userManager)
+    public static async Task SeedIdentityAsync(RoleManager<IdentityRole<int>> roleManager, UserManager<AdminUser> userManager)
     {
         foreach (var role in new[] { "Admin", "Staff" })
             if (!await roleManager.RoleExistsAsync(role))
@@ -116,5 +114,25 @@ public static class DbSeeder
             if (result.Succeeded)
                 await userManager.AddToRoleAsync(admin, "Admin");
         }
+    }
+    public static async Task SeedStaffAsync(UserManager<AdminUser> userManager, string staffPassword)
+    {
+        const string email = "staff@velora.test";
+        if (await userManager.FindByEmailAsync(email) != null) return;
+
+        var user = new AdminUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            DisplayName = "Store Staff"
+        };
+
+        var result = await userManager.CreateAsync(user, staffPassword);
+        if (!result.Succeeded)
+            throw new InvalidOperationException(
+                "Could not seed staff user: " + string.Join("; ", result.Errors.Select(e => e.Description)));
+
+        await userManager.AddToRoleAsync(user, "Staff");
     }
 }
