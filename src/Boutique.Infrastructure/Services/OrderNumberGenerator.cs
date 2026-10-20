@@ -5,5 +5,5 @@ namespace Boutique.Infrastructure.Services;
 public class OrderNumberGenerator : IOrderNumberGenerator
 {
     public string Generate() =>
-        $"VEL-{DateTime.UtcNow:yyyy}-{Random.Shared.Next(100000, 999999)}";
+        $"SJ-{DateTime.UtcNow:yyyy}-{Random.Shared.Next(100000, 999999)}";
 }

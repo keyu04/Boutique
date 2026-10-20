@@ -1,3 +1,4 @@
+using Boutique.Application.Interfaces;
 using Boutique.Domain;
 using Boutique.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
@@ -12,7 +13,13 @@ namespace Boutique.Api.Controllers;
 public class AdminOrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
-    public AdminOrdersController(AppDbContext db) => _db = db;
+    private readonly IImageStorage _storage;
+
+    public AdminOrdersController(AppDbContext db, IImageStorage storage)
+    {
+        _db = db;
+        _storage = storage;
+    }
 
     // GET /api/admin/orders?status=Pending&from=2026-10-01&to=2026-10-31&q=VEL&page=1&pageSize=20
     [HttpGet]
@@ -187,6 +194,15 @@ public class AdminOrdersController : ControllerBase
         if (o is null) return null;
 
         var isAdmin = User.IsInRole("Admin");   // Staff must never see cost
+        var productIds = o.Items.Select(i => i.ProductId).Distinct().ToArray();
+        var imageRows = await _db.ProductImages.AsNoTracking()
+            .Where(i => productIds.Contains(i.ProductId))
+            .Select(i => new { i.ProductId, i.Url, i.StorageKey, i.IsPrimary, i.SortOrder })
+            .ToListAsync(ct);
+        var imagesByProductId = imageRows
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.IsPrimary)
+                .ThenBy(i => i.SortOrder).First());
 
         return new AdminOrderDetailDto(
             o.Id, o.OrderNumber, o.CreatedAt, o.Status.ToString(), o.PaymentMethod.ToString(),
@@ -196,7 +212,10 @@ public class AdminOrdersController : ControllerBase
             OrderStatusRules.NextStatuses(o.Status).Select(s => s.ToString()).ToList(),
             o.Items.OrderBy(i => i.Id).Select(i => new AdminOrderItemDto(
                 i.ProductId, i.VariantId, i.ProductNameSnapshot, i.Size, i.UnitPriceSnapshot,
-                isAdmin ? i.UnitCostSnapshot : null, i.Quantity, i.LineTotal)).ToList(),
+                isAdmin ? i.UnitCostSnapshot : null, i.Quantity, i.LineTotal,
+                imagesByProductId.TryGetValue(i.ProductId, out var image)
+                    ? image.StorageKey != null ? _storage.GetUrl(image.StorageKey) : image.Url
+                    : null)).ToList(),
             o.StatusHistory.OrderBy(h => h.ChangedAt).ThenBy(h => h.Id).Select(h => new AdminOrderHistoryDto(
                 h.FromStatus.ToString(), h.ToStatus.ToString(), h.ChangedBy, h.ChangedAt, h.Note)).ToList());
     }

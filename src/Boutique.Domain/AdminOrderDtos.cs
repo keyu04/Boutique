@@ -6,7 +6,7 @@ public record AdminOrderListResponse(List<AdminOrderListItemDto> Items, int Page
 
 public record AdminOrderItemDto(
     int ProductId, int VariantId, string ProductName, string Size,
-    decimal UnitPrice, decimal? UnitCost, int Quantity, decimal LineTotal);   // UnitCost: Admin only
+    decimal UnitPrice, decimal? UnitCost, int Quantity, decimal LineTotal, string? ImageUrl);   // UnitCost: Admin only
 
 public record AdminOrderHistoryDto(string From, string To, string ChangedBy, DateTime ChangedAt, string? Note);
 
