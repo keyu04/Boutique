@@ -12,11 +12,11 @@ public class ProductRequest
     public decimal CostPrice { get; set; }
     public decimal WeightKg { get; set; }
     public string? Tag { get; set; }
+    public Dictionary<string, int>? Stock { get; set; }
 }
 
 public class CreateProductRequest : ProductRequest
 {
-    public Dictionary<string, int>? Stock { get; set; } // e.g. { "S": 4, "M": 6 }; missing sizes start at 0
 }
 
 public record SetActiveRequest(bool IsActive);

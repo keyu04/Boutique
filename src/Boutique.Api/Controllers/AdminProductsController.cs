@@ -106,10 +106,10 @@ public class AdminProductsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] ProductRequest req)
     {
-        var p = await _db.Products.FirstOrDefaultAsync(x => x.Id == id);
+        var p = await _db.Products.Include(x => x.Variants).FirstOrDefaultAsync(x => x.Id == id);
         if (p is null) return NotFound();
 
-        var error = await ValidateAsync(req);
+        var error = await ValidateAsync(req) ?? ValidateStock(req.Stock);
         if (error is not null) return BadRequest(new { error });
 
         p.Name = req.Name.Trim();
@@ -124,7 +124,23 @@ public class AdminProductsController : ControllerBase
         p.Tag = req.Tag;
         p.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        if (req.Stock is not null)
+        {
+            foreach (var (size, quantity) in req.Stock)
+            {
+                var variant = p.Variants.First(v => v.Size == size);
+                variant.StockQuantity = quantity;
+            }
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { error = "Stock changed while you were editing, probably because of a new order. Reload and try again." });
+        }
         return NoContent();
     }
 

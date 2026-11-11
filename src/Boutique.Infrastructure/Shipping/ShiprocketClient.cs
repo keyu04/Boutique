@@ -154,8 +154,7 @@ public class ShiprocketClient : ICourierRateProvider
         var quotes = new List<CourierQuote>();
         foreach (var company in companies.EnumerateArray())
         {
-            if (!TryGetDecimal(company, "rate", out var rate)
-    || !TryGetDecimal(company, "cod_charges", out var codCharges)
+            if (!TryGetDecimal(company, "freight_charge", out var rate) || !TryGetDecimal(company, "cod_charges", out var codCharges)
     || !TryGetEstimatedDays(company, out var days))
             {
                 _logger.LogWarning("Shiprocket returned a courier result with missing or invalid rate data; using fallback shipping rates.");
