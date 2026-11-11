@@ -12,13 +12,13 @@ namespace Boutique.Api.Controllers;
 public class OrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IShippingService _shipping;
+    private readonly IShippingQuoteService _quotes;
     private readonly IOrderNumberGenerator _orderNumbers;
 
-    public OrdersController(AppDbContext db, IShippingService shipping, IOrderNumberGenerator orderNumbers)
+    public OrdersController(AppDbContext db, IShippingQuoteService quotes, IOrderNumberGenerator orderNumbers)
     {
         _db = db;
-        _shipping = shipping;
+        _quotes = quotes;
         _orderNumbers = orderNumbers;
     }
 
@@ -65,6 +65,7 @@ public class OrdersController : ControllerBase
 
                 decimal subtotal = 0;
                 decimal totalWeight = 0;
+                decimal itemCost = 0;
                 var orderItems = new List<OrderItem>();
 
                 foreach (var item in mergedItems)
@@ -76,6 +77,7 @@ public class OrdersController : ControllerBase
                     variant.StockQuantity -= item.Quantity; // deduct now, inside the transaction
                     totalWeight += variant.Product.WeightKg * item.Quantity;
                     subtotal += variant.Product.Price * item.Quantity;
+                    itemCost += variant.Product.CostPrice * item.Quantity;
 
                     orderItems.Add(new OrderItem
                     {
@@ -90,7 +92,10 @@ public class OrdersController : ControllerBase
                     });
                 }
 
-                var (shippingCharge, _, _) = _shipping.Estimate(totalWeight, req.Pincode, req.PaymentMethod);
+                var quote = await _quotes.QuoteAsync(new ShippingQuoteRequest(
+                    req.Pincode, paymentMethod == PaymentMethod.Cod, totalWeight, subtotal, itemCost));
+                if (!quote.Deliverable) return BadRequest(new { error = quote.Message });
+                var shippingCharge = quote.Charge;
 
                 var order = new Order
                 {

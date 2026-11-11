@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.FileProviders;
 using System.Threading.RateLimiting;
+using Boutique.Infrastructure.Shipping;
+using Boutique.Application.Shipping;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +34,10 @@ builder.Services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IImageStorage, LocalDiskImageStorage>();
+builder.Services.Configure<ShippingPolicyOptions>(builder.Configuration.GetSection(ShippingPolicyOptions.Section));
+builder.Services.Configure<ShiprocketOptions>(builder.Configuration.GetSection(ShiprocketOptions.Section));
+builder.Services.AddHttpClient<ICourierRateProvider, ShiprocketClient>();
+builder.Services.AddScoped<IShippingQuoteService, ShippingQuoteService>();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
 builder.Services
@@ -70,6 +76,14 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
+    options.AddPolicy("estimate", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
         }));
