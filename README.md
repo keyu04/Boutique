@@ -162,6 +162,8 @@ dotnet user-secrets set "Cors:Origins:0" "http://localhost:4200"
 dotnet user-secrets set "Cors:Origins:1" "http://localhost:4201"
 ```
 
+For production, set `Cors:Origins` to the exact deployed frontend origin(s). Outside Development, the refresh-token cookie is `Secure` and `SameSite=None` so credentialed requests from a separately hosted frontend can send it.
+
 For live courier rates, also set:
 
 ```powershell

@@ -140,7 +140,7 @@ public class AuthController : ControllerBase
     {
         HttpOnly = true,
         Secure = !_env.IsDevelopment(), // plain http://localhost in dev; HTTPS-only everywhere else
-        SameSite = SameSiteMode.Strict,
+        SameSite = _env.IsDevelopment() ? SameSiteMode.Strict : SameSiteMode.None,
         Path = "/api/auth",             // browser sends it only to auth endpoints
         Expires = expires
     };
