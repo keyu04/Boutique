@@ -36,6 +36,7 @@ jobs:
       ConnectionStrings__Default: Host=localhost;Port=5432;Database=BoutiqueDB;Username=boutique;Password=ci_only_password
       Jwt__Key: ci-only-signing-key-0123456789-abcdefghijklmnopqrstuvwxyz
       Seed__AdminPassword: Ci-Test-Passw0rd!
+      Seed__StaffPassword: Ci-Staff-Passw0rd!
 
     steps:
       - uses: actions/checkout@v4

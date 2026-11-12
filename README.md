@@ -1,5 +1,7 @@
 # Boutique e-commerce platform
 
+[![CI](https://github.com/keyu04/Boutique/actions/workflows/ci.yml/badge.svg)](https://github.com/keyu04/Boutique/actions/workflows/ci.yml)
+
 A full-stack e-commerce project for a women's ethnic-wear boutique. The backend is an ASP.NET Core Web API with PostgreSQL; the customer storefront and staff admin are Angular applications.
 
 The backend and frontend are maintained in separate repositories:
@@ -150,6 +152,7 @@ dotnet user-secrets set "Jwt:Key" "<long random signing key>"
 dotnet user-secrets set "Jwt:Issuer" "<issuer>"
 dotnet user-secrets set "Jwt:Audience" "<audience>"
 dotnet user-secrets set "Seed:StaffPassword" "<staff password>"
+dotnet user-secrets set "Seed:AdminPassword" "<admin password>"
 ```
 
 For browser requests from the local Angular apps, configure the allowed origins:
