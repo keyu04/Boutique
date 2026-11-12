@@ -11,4 +11,11 @@ public record OrderRequestItem(int VariantId, int Quantity);
 public record OrderResponse(
     string OrderNumber, string Status,
     decimal Subtotal, decimal ShippingCharge, decimal Total,
-    string PaymentMethod, string PaymentStatus);
+    string PaymentMethod, string PaymentStatus,
+    IReadOnlyList<OrderItemResponse> Items,
+    string WhatsAppMessage,
+    string WhatsAppShareUrl);
+
+public record OrderItemResponse(
+    string ProductName, string Size, int Quantity,
+    decimal UnitPrice, decimal LineTotal);

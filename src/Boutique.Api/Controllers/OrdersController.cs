@@ -4,6 +4,8 @@ using Boutique.Domain;
 using Boutique.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 
 namespace Boutique.Api.Controllers;
 
@@ -14,12 +16,18 @@ public class OrdersController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IShippingQuoteService _quotes;
     private readonly IOrderNumberGenerator _orderNumbers;
+    private readonly IConfiguration _configuration;
 
-    public OrdersController(AppDbContext db, IShippingQuoteService quotes, IOrderNumberGenerator orderNumbers)
+    public OrdersController(
+        AppDbContext db,
+        IShippingQuoteService quotes,
+        IOrderNumberGenerator orderNumbers,
+        IConfiguration configuration)
     {
         _db = db;
         _quotes = quotes;
         _orderNumbers = orderNumbers;
+        _configuration = configuration;
     }
 
     [HttpPost]
@@ -123,10 +131,26 @@ public class OrdersController : ControllerBase
                 await _db.SaveChangesAsync();   // <-- concurrency conflict on stock would throw here
                 await tx.CommitAsync();
 
+                var responseItems = order.Items
+                    .Select(item => new OrderItemResponse(
+                        item.ProductNameSnapshot,
+                        item.Size,
+                        item.Quantity,
+                        item.UnitPriceSnapshot,
+                        item.LineTotal))
+                    .ToList();
+                var whatsappMessage = BuildWhatsAppMessage(order, responseItems);
+                var businessPhoneNumber = _configuration["WhatsApp:BusinessPhoneNumber"];
+                var whatsappRecipient = string.IsNullOrWhiteSpace(businessPhoneNumber)
+                    ? string.Empty
+                    : string.Concat(businessPhoneNumber.Where(char.IsAsciiDigit));
+                var whatsappShareUrl = $"https://wa.me/{whatsappRecipient}?text={Uri.EscapeDataString(whatsappMessage)}";
+
                 return Ok(new OrderResponse(
                     order.OrderNumber, order.Status.ToString(),
                     order.Subtotal, order.ShippingCharge, order.Total,
-                    order.PaymentMethod.ToString(), order.PaymentStatus.ToString()));
+                    order.PaymentMethod.ToString(), order.PaymentStatus.ToString(),
+                    responseItems, whatsappMessage, whatsappShareUrl));
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -138,5 +162,31 @@ public class OrdersController : ControllerBase
         }
 
         return Conflict(new { error = "Could not place order. Please try again." });
+    }
+
+    private static string BuildWhatsAppMessage(Order order, IReadOnlyList<OrderItemResponse> items)
+    {
+        var message = new StringBuilder()
+            .AppendLine($"New order: {order.OrderNumber}")
+            .AppendLine($"Customer: {order.CustomerName}")
+            .AppendLine($"Phone: {order.Phone}")
+            .AppendLine($"Ship to: {order.AddressLine}, {order.City}, {order.State} {order.Pincode}")
+            .AppendLine()
+            .AppendLine("Items:");
+
+        foreach (var item in items)
+        {
+            message.AppendLine(
+                $"- {item.ProductName} (size {item.Size}): {item.Quantity} x Rs {item.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture)} = Rs {item.LineTotal.ToString("0.00", CultureInfo.InvariantCulture)}");
+        }
+
+        return message
+            .AppendLine()
+            .AppendLine($"Subtotal: Rs {order.Subtotal.ToString("0.00", CultureInfo.InvariantCulture)}")
+            .AppendLine($"Shipping: Rs {order.ShippingCharge.ToString("0.00", CultureInfo.InvariantCulture)}")
+            .AppendLine($"Total: Rs {order.Total.ToString("0.00", CultureInfo.InvariantCulture)}")
+            .AppendLine($"Payment: {order.PaymentMethod} ({order.PaymentStatus})")
+            .Append($"Order status: {order.Status}")
+            .ToString();
     }
 }
