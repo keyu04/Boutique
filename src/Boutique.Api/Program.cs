@@ -34,7 +34,12 @@ builder.Services.AddScoped<IShippingService, RuleBasedShippingService>();
 builder.Services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddSingleton<IImageStorage, LocalDiskImageStorage>();
+
+if (builder.Configuration["ImageStorage:Provider"] == "S3")
+    builder.Services.AddSingleton<IImageStorage, S3ImageStorage>();
+else
+    builder.Services.AddSingleton<IImageStorage, LocalDiskImageStorage>();
+
 builder.Services.Configure<ShippingPolicyOptions>(builder.Configuration.GetSection(ShippingPolicyOptions.Section));
 builder.Services.Configure<ShiprocketOptions>(builder.Configuration.GetSection(ShiprocketOptions.Section));
 builder.Services.AddHttpClient<ICourierRateProvider, ShiprocketClient>();
