@@ -57,35 +57,30 @@ public class ShiprocketClient : ICourierRateProvider
                 + $"&weight={weightKg.ToString(CultureInfo.InvariantCulture)}"
                 + $"&cod={(cod ? "1" : "0")}";
 
-            for (var attempt = 0; attempt < 2; attempt++)
+            var token = await GetTokenAsync(ct);
+            if (token is null) return null;
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"{_options.BaseUrl.TrimEnd('/')}/v1/external/courier/serviceability/?{query}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            using var response = await _httpClient.SendAsync(request, ct);
+            if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity)
             {
-                var token = await GetTokenAsync(ct);
-                if (token is null) return null;
-
-                using var request = new HttpRequestMessage(
-                    HttpMethod.Get,
-                    $"{_options.BaseUrl.TrimEnd('/')}/v1/external/courier/serviceability/?{query}");
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                using var response = await _httpClient.SendAsync(request, ct);
-                if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity)
-                {
-                    _logger.LogWarning("Shiprocket answered {StatusCode} for {Pincode}; treating as not serviceable.", response.StatusCode, deliveryPincode);
-                    return Array.Empty<CourierQuote>();
-                }
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("Shiprocket serviceability request failed with status {StatusCode}; using fallback shipping rates.",
-                        response.StatusCode);
-                    return null;
-                }
-
-                using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-                return ParseQuotes(document.RootElement);
+                _logger.LogWarning("Shiprocket answered {StatusCode} for {Pincode}; treating as not serviceable.", response.StatusCode, deliveryPincode);
+                return Array.Empty<CourierQuote>();
             }
 
-            return null;
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Shiprocket serviceability request failed with status {StatusCode}; using fallback shipping rates.",
+                    response.StatusCode);
+                return null;
+            }
+
+            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            return ParseQuotes(document.RootElement);
         }
         catch (HttpRequestException ex)
         {

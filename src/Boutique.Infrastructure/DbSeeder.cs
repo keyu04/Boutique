@@ -6,8 +6,8 @@ namespace Boutique.Infrastructure;
 
 public static class DbSeeder
 {
-    public const string AdminEmail = "admin@velora.test";
-    public const string StaffEmail = "staff@velora.test";
+    public const string AdminEmail = "admin@sahjish.test";
+    public const string StaffEmail = "staff@sahjish.test";
     public static async Task SeedAsync(AppDbContext db)
     {
         if (await db.Categories.AnyAsync()) return; // already seeded
