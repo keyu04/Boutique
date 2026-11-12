@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Boutique.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,8 +72,7 @@ public class RefreshTokenTests : IClassFixture<WebApplicationFactory<Program>>
 
     private async Task<string> LoginAndGetCookieAsync()
     {
-        var response = await _client.PostAsJsonAsync("/api/auth/login",
-            new { email = "admin@velora.test", password = _adminPassword });
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new { email = DbSeeder.AdminEmail, password = _adminPassword });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return ExtractRefreshCookie(response);
     }

@@ -6,6 +6,8 @@ namespace Boutique.Infrastructure;
 
 public static class DbSeeder
 {
+    public const string AdminEmail = "admin@velora.test";
+    public const string StaffEmail = "staff@velora.test";
     public static async Task SeedAsync(AppDbContext db)
     {
         if (await db.Categories.AnyAsync()) return; // already seeded
@@ -101,23 +103,34 @@ public static class DbSeeder
         db.Products.AddRange(products);
         await db.SaveChangesAsync();
     }
-    public static async Task SeedIdentityAsync(RoleManager<IdentityRole<int>> roleManager, UserManager<AdminUser> userManager)
+    public static async Task SeedIdentityAsync(
+        RoleManager<IdentityRole<int>> roleManager, UserManager<AdminUser> userManager, string adminPassword)
     {
+        if (string.IsNullOrWhiteSpace(adminPassword))
+            throw new InvalidOperationException(
+                "Set Seed:AdminPassword (user-secrets or environment variable) to seed the admin user.");
+
         foreach (var role in new[] { "Admin", "Staff" })
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole<int>(role));
 
-        if (await userManager.FindByEmailAsync("admin@velora.test") is null)
+        if (await userManager.FindByEmailAsync(AdminEmail) is null)
         {
-            var admin = new AdminUser { UserName = "admin@velora.test", Email = "admin@velora.test", DisplayName = "Keyur" };
-            var result = await userManager.CreateAsync(admin, "Admin@12345"); // dev password only
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(admin, "Admin");
+            var admin = new AdminUser { UserName = AdminEmail, Email = AdminEmail, DisplayName = "Keyur" };
+            var result = await userManager.CreateAsync(admin, adminPassword);
+            if (!result.Succeeded)
+                throw new InvalidOperationException(
+                    "Could not seed admin user: " + string.Join("; ", result.Errors.Select(e => e.Description)));
+
+            await userManager.AddToRoleAsync(admin, "Admin");
         }
     }
     public static async Task SeedStaffAsync(UserManager<AdminUser> userManager, string staffPassword)
     {
-        const string email = "staff@velora.test";
+        var email = StaffEmail;
+        if (string.IsNullOrWhiteSpace(staffPassword))
+            throw new InvalidOperationException(
+                "Set Seed:StaffPassword (user-secrets or environment variable) to seed the staff user.");
         if (await userManager.FindByEmailAsync(email) != null) return;
 
         var user = new AdminUser

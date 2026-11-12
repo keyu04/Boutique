@@ -99,7 +99,7 @@ if (app.Environment.IsDevelopment())
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AdminUser>>();
-    await DbSeeder.SeedIdentityAsync(roleManager, userManager);
+    await DbSeeder.SeedIdentityAsync(roleManager, userManager, builder.Configuration["Seed:AdminPassword"] ?? "");
 
     await DbSeeder.SeedStaffAsync(userManager, builder.Configuration["Seed:StaffPassword"]!);
 }

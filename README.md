@@ -170,7 +170,7 @@ dotnet user-secrets set "Shiprocket:Password" "<API-user password>"
 dotnet user-secrets set "Shiprocket:PickupPincode" "<pickup pincode>"
 ```
 
-The development seeder currently creates an Admin account using a development-only password in code. Do not use that account setup outside local development; replace it with a securely configured password before any shared or deployed use.
+The development seeder (it runs only in the Development environment) creates the Admin and Staff users from Seed:AdminPassword and Seed:StaffPassword. Both secrets are required.
 
 ### 3. Apply migrations and start the API
 
