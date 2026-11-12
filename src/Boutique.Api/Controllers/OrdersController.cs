@@ -1,5 +1,6 @@
 using Boutique.Application.Dtos;
 using Boutique.Application.Interfaces;
+using Boutique.Application.Shipping;
 using Boutique.Domain;
 using Boutique.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
@@ -51,10 +52,43 @@ public class OrdersController : ControllerBase
             return BadRequest(new { error = "Full address, city and state are required." });
 
         // merge duplicate variant lines
+        // merge duplicate variant lines
         var mergedItems = req.Items
             .GroupBy(i => i.VariantId)
             .Select(g => new { VariantId = g.Key, Quantity = g.Sum(x => x.Quantity) })
             .ToList();
+        var variantIds = mergedItems.Select(i => i.VariantId).ToList();
+
+        // 2. Price the order and ask for the courier quote BEFORE any transaction,
+        //    so a slow Shiprocket call never holds stock rows locked.
+        var preview = await _db.ProductVariants.AsNoTracking()
+            .Include(v => v.Product)
+            .Where(v => variantIds.Contains(v.Id))
+            .ToListAsync();
+        if (preview.Count != variantIds.Count)
+            return BadRequest(new { error = "One or more items are no longer available." });
+
+        decimal subtotal = 0, totalWeight = 0, itemCost = 0;
+        foreach (var item in mergedItems)
+        {
+            var v = preview.First(x => x.Id == item.VariantId);
+            subtotal += v.Product.Price * item.Quantity;
+            totalWeight += v.Product.WeightKg * item.Quantity;
+            itemCost += v.Product.CostPrice * item.Quantity;
+        }
+
+        var quote = await _quotes.QuoteAsync(new ShippingQuoteRequest(
+            req.Pincode, paymentMethod == PaymentMethod.Cod, totalWeight, subtotal, itemCost));
+        if (!quote.Deliverable) return BadRequest(new { error = quote.Message });
+
+        if (!ShippingTolerance.Matches(req.ExpectedShippingCharge, quote.Charge))
+            return Conflict(new
+            {
+                code = "shipping_changed",
+                error = $"Shipping is now ₹{quote.Charge:0} (it was ₹{req.ExpectedShippingCharge:0}). Please review your total.",
+                shippingCharge = quote.Charge,
+            });
+        var shippingCharge = quote.Charge;
 
         const int maxRetries = 1;
         for (int attempt = 0; attempt <= maxRetries; attempt++)
@@ -62,7 +96,6 @@ public class OrdersController : ControllerBase
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                var variantIds = mergedItems.Select(i => i.VariantId).ToList();
                 var variants = await _db.ProductVariants
                     .Include(v => v.Product)
                     .Where(v => variantIds.Contains(v.Id))
@@ -71,9 +104,7 @@ public class OrdersController : ControllerBase
                 if (variants.Count != variantIds.Count)
                     return BadRequest(new { error = "One or more items are no longer available." });
 
-                decimal subtotal = 0;
-                decimal totalWeight = 0;
-                decimal itemCost = 0;
+                decimal txSubtotal = 0, txWeight = 0;
                 var orderItems = new List<OrderItem>();
 
                 foreach (var item in mergedItems)
@@ -83,9 +114,8 @@ public class OrdersController : ControllerBase
                         return Conflict(new { error = $"Only {variant.StockQuantity} left for {variant.Product.Name} (size {variant.Size})." });
 
                     variant.StockQuantity -= item.Quantity; // deduct now, inside the transaction
-                    totalWeight += variant.Product.WeightKg * item.Quantity;
-                    subtotal += variant.Product.Price * item.Quantity;
-                    itemCost += variant.Product.CostPrice * item.Quantity;
+                    txWeight += variant.Product.WeightKg * item.Quantity;
+                    txSubtotal += variant.Product.Price * item.Quantity;
 
                     orderItems.Add(new OrderItem
                     {
@@ -100,10 +130,9 @@ public class OrdersController : ControllerBase
                     });
                 }
 
-                var quote = await _quotes.QuoteAsync(new ShippingQuoteRequest(
-                    req.Pincode, paymentMethod == PaymentMethod.Cod, totalWeight, subtotal, itemCost));
-                if (!quote.Deliverable) return BadRequest(new { error = quote.Message });
-                var shippingCharge = quote.Charge;
+                // A price or weight edit between the quote and now would make the quote wrong: stop, don't guess.
+                if (txSubtotal != subtotal || txWeight != totalWeight)
+                    return Conflict(new { error = "Prices changed while placing your order. Please review your bag and try again." });
 
                 var order = new Order
                 {
@@ -117,9 +146,10 @@ public class OrdersController : ControllerBase
                     City = req.City,
                     State = req.State,
                     Pincode = req.Pincode,
-                    Subtotal = subtotal,
+                    Subtotal = txSubtotal,
                     ShippingCharge = shippingCharge,
-                    Total = subtotal + shippingCharge,
+                    ShippingCostSnapshot = quote.ExpectedCourierCost,
+                    Total = txSubtotal + shippingCharge,
                     Items = orderItems,
                     StatusHistory = new List<OrderStatusHistory>
                     {

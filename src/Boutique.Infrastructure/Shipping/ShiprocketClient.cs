@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Boutique.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Boutique.Infrastructure.Shipping;
 
@@ -16,23 +17,30 @@ public class ShiprocketClient : ICourierRateProvider
     private readonly ILogger<ShiprocketClient> _logger;
     private static readonly SemaphoreSlim _tokenLock = new(1, 1);
     private static string? _token;
+    private readonly IMemoryCache _cache;
 
-    public ShiprocketClient(
-        HttpClient httpClient,
-        IOptions<ShiprocketOptions> options,
-        ILogger<ShiprocketClient> logger)
+
+    public ShiprocketClient(HttpClient httpClient, IOptions<ShiprocketOptions> options, ILogger<ShiprocketClient> logger, IMemoryCache cache)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<IReadOnlyList<CourierQuote>?> GetQuotesAsync(
-        string pickupPincode,
-        string deliveryPincode,
-        decimal weightKg,
-        bool cod,
-        CancellationToken ct = default)
+            string pickupPincode, string deliveryPincode, decimal weightKg, bool cod, CancellationToken ct = default)
+    {
+        // Couriers bill in 0.5 kg steps, so round up: same price, and far more cache hits.
+        var billable = Math.Max(0.5m, Math.Ceiling(weightKg * 2) / 2m);
+        var key = $"sr-rates:{pickupPincode}:{deliveryPincode}:{billable.ToString(CultureInfo.InvariantCulture)}:{(cod ? 1 : 0)}";
+        if (_cache.TryGetValue(key, out IReadOnlyList<CourierQuote>? hit) && hit is not null) return hit;
+
+        var fresh = await FetchAsync(pickupPincode, deliveryPincode, billable, cod, ct);
+        if (fresh is not null) _cache.Set(key, fresh, TimeSpan.FromMinutes(15));   // never cache a failure
+        return fresh;
+    }
+    public async Task<IReadOnlyList<CourierQuote>?> FetchAsync(string pickupPincode, string deliveryPincode, decimal weightKg, bool cod, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_options.Email)
             || string.IsNullOrWhiteSpace(_options.Password)

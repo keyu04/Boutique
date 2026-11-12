@@ -4,7 +4,8 @@ public record OrderRequest(
     List<OrderRequestItem> Items,
     string CustomerName, string Phone, string AddressLine,
     string City, string State, string Pincode,
-    string PaymentMethod); // "Prepaid" or "Cod" — no prices here, ever
+    string PaymentMethod,   // "Prepaid" or "Cod"
+    decimal? ExpectedShippingCharge = null);   // the shipping the customer saw; the server still decides the real price
 
 public record OrderRequestItem(int VariantId, int Quantity);
 

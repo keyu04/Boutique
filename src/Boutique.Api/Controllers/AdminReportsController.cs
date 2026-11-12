@@ -60,7 +60,13 @@ public class AdminReportsController : ControllerBase
         var margin = itemRevenue - cost;
         var marginPercent = itemRevenue > 0 ? Math.Round(margin / itemRevenue * 100m, 1) : 0m;
 
+        var shippingCost = await counted.SumAsync(o => (decimal?)o.ShippingCostSnapshot, ct) ?? 0m;
+        var netMargin = margin + shipping - shippingCost;                 // items margin + shipping we collected - shipping we paid
+        var netBase = itemRevenue + shipping;
+        var netMarginPercent = netBase > 0 ? Math.Round(netMargin / netBase * 100m, 1) : 0m;
+
         return Ok(new ReportSummaryDto(fromDate, toDate, orderCount, itemRevenue, shipping,
-    Math.Round(cost, 2), Math.Round(margin, 2), marginPercent, ordersByStatus));
+    Math.Round(cost, 2), Math.Round(margin, 2), marginPercent, ordersByStatus,
+    Math.Round(shippingCost, 2), Math.Round(netMargin, 2), netMarginPercent));
     }
 }

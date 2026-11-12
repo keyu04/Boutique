@@ -9,4 +9,7 @@ public record ReportSummaryDto(
     decimal Cost,
     decimal Margin,
     decimal MarginPercent,
-    Dictionary<string, int> OrdersByStatus);
+    Dictionary<string, int> OrdersByStatus,
+    decimal ShippingCost = 0,
+    decimal NetMargin = 0,
+    decimal NetMarginPercent = 0);
