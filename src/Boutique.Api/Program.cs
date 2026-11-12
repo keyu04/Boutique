@@ -12,6 +12,7 @@ using Microsoft.Extensions.FileProviders;
 using System.Threading.RateLimiting;
 using Boutique.Infrastructure.Shipping;
 using Boutique.Application.Shipping;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +40,13 @@ builder.Services.Configure<ShiprocketOptions>(builder.Configuration.GetSection(S
 builder.Services.AddHttpClient<ICourierRateProvider, ShiprocketClient>();
 builder.Services.AddScoped<IShippingQuoteService, ShippingQuoteService>();
 builder.Services.AddMemoryCache();
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownIPNetworks.Clear();   // KnownNetworks on older SDKs
+    o.KnownProxies.Clear();
+    o.ForwardLimit = 2;          // Cloudflare -> Render: skip our own proxy hop, take the real client
+});
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
 builder.Services
@@ -91,23 +99,28 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
-if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await DbSeeder.SeedAsync(db);
-
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AdminUser>>();
-    await DbSeeder.SeedIdentityAsync(roleManager, userManager, builder.Configuration["Seed:AdminPassword"] ?? "");
 
-    await DbSeeder.SeedStaffAsync(userManager, builder.Configuration["Seed:StaffPassword"]!);
+    // demo catalogue: always in Development, in Production only if Seed__Demo=true
+    if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Seed:Demo"))
+        await DbSeeder.SeedAsync(db);
+
+    await DbSeeder.SeedIdentityAsync(roleManager, userManager, builder.Configuration["Seed:AdminPassword"] ?? "");
+    await DbSeeder.SeedStaffAsync(userManager, builder.Configuration["Seed:StaffPassword"] ?? "");
 }
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseForwardedHeaders();
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
 
 app.UseHttpsRedirection();
 
