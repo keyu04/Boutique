@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: boutique
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: BoutiqueDB
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U boutique"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Throwaway values for this disposable CI database only. Never put real secrets here.
+    env:
+      ConnectionStrings__Default: Host=localhost;Port=5432;Database=BoutiqueDB;Username=boutique;Password=ci_only_password
+      Jwt__Key: ci-only-signing-key-0123456789-abcdefghijklmnopqrstuvwxyz
+      Seed__AdminPassword: Ci-Test-Passw0rd!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Boutique.slnx
+
+      - name: Build
+        run: dotnet build Boutique.slnx -c Release --no-restore
+
+      - name: Apply database migrations
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.*
+          dotnet ef database update --project src/Boutique.Infrastructure --startup-project src/Boutique.Api
+
+      - name: Test
+        run: dotnet test Boutique.slnx -c Release --no-build --verbosity normal
