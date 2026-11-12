@@ -13,6 +13,7 @@ public class OrderConfig : IEntityTypeConfiguration<Order>
 
         b.Property(x => x.Subtotal).HasPrecision(18, 2);
         b.Property(x => x.ShippingCharge).HasPrecision(18, 2);
+        b.Property(x => x.ShippingCostSnapshot).HasPrecision(18, 2);
         b.Property(x => x.Total).HasPrecision(18, 2);
 
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);

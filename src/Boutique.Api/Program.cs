@@ -38,6 +38,7 @@ builder.Services.Configure<ShippingPolicyOptions>(builder.Configuration.GetSecti
 builder.Services.Configure<ShiprocketOptions>(builder.Configuration.GetSection(ShiprocketOptions.Section));
 builder.Services.AddHttpClient<ICourierRateProvider, ShiprocketClient>();
 builder.Services.AddScoped<IShippingQuoteService, ShippingQuoteService>();
+builder.Services.AddMemoryCache();
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
 builder.Services

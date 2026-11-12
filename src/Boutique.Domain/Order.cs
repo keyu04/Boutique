@@ -20,12 +20,13 @@ public class Order
 
     public decimal Subtotal { get; set; }
     public decimal ShippingCharge { get; set; }
+    public decimal ShippingCostSnapshot { get; set; }
     public decimal Total { get; set; }
 
     public string? CourierName { get; set; }
     public string? TrackingNumber { get; set; }
 
-    public uint Version  { get; set; }
+    public uint Version { get; set; }
 
     public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
     public ICollection<OrderStatusHistory> StatusHistory { get; set; } = new List<OrderStatusHistory>();
