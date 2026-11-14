@@ -115,9 +115,7 @@ public class AdminOrdersController : ControllerBase
                 }
             }
 
-            if (target == OrderStatus.Delivered
-                && order.PaymentMethod == PaymentMethod.Cod
-                && order.PaymentStatus == PaymentStatus.CodDue)
+            if (PaymentStatusRules.ShouldMarkCodPaidOnDelivery(order, target))
                 order.PaymentStatus = PaymentStatus.Paid;   // cash collected on delivery
 
             order.StatusHistory.Add(new OrderStatusHistory
@@ -137,6 +135,41 @@ public class AdminOrdersController : ControllerBase
             catch (DbUpdateConcurrencyException)
             {
                 _db.ChangeTracker.Clear();        // throw away stale data, loop reloads fresh rows
+            }
+        }
+
+        return Fail(409, "This order was changed by someone else at the same time. Reload and try again.");
+    }
+
+    [HttpPatch("{id:int}/payment")]
+    public async Task<IActionResult> MarkPaymentPaid(int id, MarkPaymentPaidRequest req, CancellationToken ct)
+    {
+        var paymentReference = req.PaymentReference?.Trim();
+        if (paymentReference?.Length > 100)
+            return Fail(400, "Payment reference can be at most 100 characters.");
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == id, ct);
+            if (order is null) return NotFound();
+
+            if (order.PaymentStatus == PaymentStatus.Paid)
+                return Ok(await LoadDetailAsync(id, ct));
+            if (!PaymentStatusRules.CanManuallyMarkAsPaid(order))
+                return Fail(409, "Only pending online payments can be marked as paid.");
+
+            order.PaymentStatus = PaymentStatus.Paid;
+            if (!string.IsNullOrEmpty(paymentReference))
+                order.PaymentReference = paymentReference;
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                return Ok(await LoadDetailAsync(id, ct));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                _db.ChangeTracker.Clear();
             }
         }
 
