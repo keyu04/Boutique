@@ -24,7 +24,7 @@ The API is the integration boundary between them. Keeping the repositories separ
 ### Admin
 
 - View order queues and a 30-day summary.
-- Search and filter orders, update their status, and add courier tracking details.
+- Search and filter orders, update order status, confirm verified prepaid payments, and add courier tracking details. COD payments are marked paid when delivery is confirmed.
 - Manage products, images, and stock.
 - View reports with item revenue, cost of goods, shipping collected, courier costs, and net profit.
 - Restrict cost and margin data to Admin users.

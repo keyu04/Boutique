@@ -21,3 +21,4 @@ public record AdminOrderDetailDto(
 
 public record ChangeStatusRequest(string Status, string? Note);
 public record SetTrackingRequest(string CourierName, string TrackingNumber);
+public record MarkPaymentPaidRequest(string? PaymentReference);
